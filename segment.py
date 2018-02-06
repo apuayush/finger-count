@@ -2,6 +2,7 @@
 import cv2
 import imutils
 import numpy as np
+from sklearn.metrics import pairwise
 
 bg = None
 
@@ -38,6 +39,55 @@ def segment(img, threshold=25):
         return (thresholded, segmented)
 
 
+def count_fingers(thresholded, segmented):
+
+    con_hull = cv2.convexHull(segmented)
+    # find left right top bottom convex hull points
+    extreme_top = tuple(con_hull[con_hull[:, :, 1].argmin()][0])
+    extreme_bottom = tuple(con_hull[con_hull[:, :, 1].argmax()][0])
+    extreme_left = tuple(con_hull[con_hull[:, :, 0].argmin()][0])
+    extreme_right = tuple(con_hull[con_hull[:, :, 0].argmax()][0])
+    print(con_hull)
+    center_X = (extreme_left[0] + extreme_right[0]) // 2
+    center_Y = (extreme_top[0] + extreme_bottom[0]) // 2
+
+    #  find max distance b/w center and a convex_hull point
+    distance = pairwise.euclidean_distances([(center_X, center_Y)],
+                                            Y=[extreme_left, extreme_right, extreme_top, extreme_bottom])[0]
+    maximum_distance = distance[distance.argmax()]
+
+    # 80% of maximum euclidean distance
+    radius = int(0.8 * maximum_distance)
+
+    circumference = (2 * np.pi * radius)
+
+    # take out the circular region coinciding with palm and fingers
+    circular_roi = np.zeros(thresholded.shape[:2], dtype="uint8")
+
+    cv2.circle(circular_roi, (center_X, center_Y), radius, 255, 1)
+
+    circular_roi = cv2.bitwise_and(thresholded, thresholded, mask=circular_roi)
+
+    # compute the contours in the circular ROI
+    (_, contours, _) = cv2.findContours(circular_roi.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+
+    # initalize the finger count
+    count = 0
+
+    for c in contours:
+        # compute the bounding box of the contour
+        (x, y, w, h) = cv2.boundingRect(c)
+
+        # increment the count of fingers only if -
+        # 1. The contour region is not the wrist (bottom area)
+        # 2. The number of points along the contour does not exceed
+        #     25% of the circumference of the circular ROI
+        if ((center_Y + (center_Y * 0.25)) > (y + h)) and ((circumference * 0.25) > c.shape[0]):
+            count += 1
+
+    return count
+
+
 if __name__ == "__main__":
     avg_wt = 0.5
     camera = cv2.VideoCapture(0)
@@ -49,8 +99,6 @@ if __name__ == "__main__":
     while True:
         # current frame
         ret_value, frame = camera.read()
-        print(ret_value)
-
         frame = imutils.resize(frame, width=700)
         # flip the frame to remove mirror view
         frame = cv2.flip(frame, 1)
@@ -65,7 +113,7 @@ if __name__ == "__main__":
 
         # calibrating our running average until a threshold is reached
 
-        if num_frames<30:
+        if num_frames < 30:
             running_avg(gray, avg_wt)
 
         else:
@@ -77,6 +125,8 @@ if __name__ == "__main__":
 
                 # draw segment region and display the frame
                 cv2.drawContours(clone, [segmented + (right, top)], -1, (0, 0, 255))
+                fingers = count_fingers(thresholded, segmented)
+                cv2.putText(clone, str(fingers), (70, 45), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
                 cv2.imshow("Thesholded", thresholded)
 
         # draw segmented hand
@@ -93,12 +143,5 @@ if __name__ == "__main__":
         if keypress == ord("q"):
             break
 
-    # free up memory
     camera.release()
     cv2.destroyAllWindows()
-
-
-    #
-    #
-    #
-    #

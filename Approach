@@ -1,0 +1,32 @@
+﻿Our main purpose is to recognize hand gestures from a video sequence and then train computer to perform motions using that.
+
+1- To recognize the gestures from a live video , we need to take out the hand region removing unwanted portion in the video sequence.
+So ,
+	i- Find and segment the hand region.
+	ii - For testing count the number of fingers in your hand.
+
+	i- Segmentation
+
+		A- Background Subtraction- running average of 30 frames is the background. Concept is simple (background with hand - background without hand)
+
+		running average formula -> dst(x,y)=(1−a).dst(x,y)+a.src(x,y)
+
+		B- Motion Detection and Thresholding - we need to threshold other part so that only our hand appears. i.e make hand part pixels as 0 and other as 1 or vice versa depends on you.
+
+		C- Contour Extraction- Contour is the boundary of an object . so largest area contour is considered as our hand.
+
+2- After segregating hand from backgroung we count fingers.
+	
+Step 1 – Find the convex hull of the arm. Convex hull are the points which when joined is of minimum area inside which all x and y coordinates of hand are present.
+
+Step 2- Take extreme top, bottom, left and right convex hull points.
+
+Step 4- Using euclidean distance calculate maximum distance and with that calculate radius of a hypothetical circle . The radius is taken as 80% of the maximum distance
+
+Step 5- take out the circle coinciding with palm and fingers using bitwise and operation between the hand and the circle
+
+Step 6- compute the bounding box of contour.# increment the count of fingers only if -
+1. The contour region is not the wrist (bottom area)
+2. The number of points along the contour does not exceed 25% of the circumference of the circular ROI
+
+		
